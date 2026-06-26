@@ -11,17 +11,25 @@ class MemoryService(
     private val vectorStoreGateway: VectorStoreGateway,
 ) {
     suspend fun recall(characterId: String, query: String): List<VectorMemory> {
-        return vectorStoreGateway.search(VectorSearchRequest(characterId = characterId, query = query))
+        val queryEmbedding = embeddingGateway.embed(query)
+        return vectorStoreGateway.search(
+            VectorSearchRequest(
+                characterId = characterId,
+                query = query,
+                queryEmbedding = queryEmbedding,
+            )
+        )
     }
 
     suspend fun saveHint(characterId: String, content: String, importance: Double) {
-        embeddingGateway.embed(content)
+        val embedding = embeddingGateway.embed(content)
         vectorStoreGateway.upsert(
             VectorMemory(
                 id = "memory_${kotlinx.datetime.Clock.System.now().toEpochMilliseconds()}",
                 characterId = characterId,
                 content = content,
                 importance = importance,
+                embedding = embedding,
             )
         )
     }

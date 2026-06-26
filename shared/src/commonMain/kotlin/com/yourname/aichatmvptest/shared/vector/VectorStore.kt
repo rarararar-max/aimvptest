@@ -5,12 +5,14 @@ data class VectorMemory(
     val characterId: String,
     val content: String,
     val importance: Double,
+    val embedding: List<Double> = emptyList(),
     val metadata: Map<String, String> = emptyMap(),
 )
 
 data class VectorSearchRequest(
     val characterId: String,
     val query: String,
+    val queryEmbedding: List<Double> = emptyList(),
     val limit: Int = 6,
 )
 

@@ -43,11 +43,27 @@ CREATE TABLE memory_items (
     content TEXT NOT NULL,
     importance REAL NOT NULL,
     keywords_json TEXT NOT NULL DEFAULT '[]',
+    embedding_json TEXT NOT NULL DEFAULT '[]',
     remote_vector_id TEXT,
     source_message_id TEXT,
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL
 );
+
+selectMemoriesByCharacter:
+SELECT * FROM memory_items WHERE character_id = ? ORDER BY importance DESC, updated_at DESC;
+
+upsertMemoryItem:
+INSERT OR REPLACE INTO memory_items(
+    id, character_id, type, content, importance, keywords_json, embedding_json, remote_vector_id,
+    source_message_id, created_at, updated_at
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+deleteMemoryItem:
+DELETE FROM memory_items WHERE id = ?;
+
+clearMemoriesByCharacter:
+DELETE FROM memory_items WHERE character_id = ?;
 
 CREATE TABLE model_configs (
     id TEXT NOT NULL PRIMARY KEY,

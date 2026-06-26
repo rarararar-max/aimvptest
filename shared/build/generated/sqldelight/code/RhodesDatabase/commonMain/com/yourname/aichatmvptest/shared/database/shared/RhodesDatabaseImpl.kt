@@ -24,7 +24,7 @@ private class RhodesDatabaseImpl(
 
   public object Schema : SqlSchema<QueryResult.Value<Unit>> {
     override val version: Long
-      get() = 1
+      get() = 2
 
     override fun create(driver: SqlDriver): QueryResult.Value<Unit> {
       driver.execute(null, """
@@ -76,6 +76,7 @@ private class RhodesDatabaseImpl(
           |    content TEXT NOT NULL,
           |    importance REAL NOT NULL,
           |    keywords_json TEXT NOT NULL DEFAULT '[]',
+          |    embedding_json TEXT NOT NULL DEFAULT '[]',
           |    remote_vector_id TEXT,
           |    source_message_id TEXT,
           |    created_at INTEGER NOT NULL,
@@ -122,11 +123,38 @@ private class RhodesDatabaseImpl(
       return QueryResult.Unit
     }
 
+    private fun migrateInternal(
+      driver: SqlDriver,
+      oldVersion: Long,
+      newVersion: Long,
+    ): QueryResult.Value<Unit> {
+      if (oldVersion <= 1 && newVersion > 1) {
+        driver.execute(null,
+            "ALTER TABLE memory_items ADD COLUMN embedding_json TEXT NOT NULL DEFAULT '[]'", 0)
+      }
+      return QueryResult.Unit
+    }
+
     override fun migrate(
       driver: SqlDriver,
       oldVersion: Long,
       newVersion: Long,
       vararg callbacks: AfterVersion,
-    ): QueryResult.Value<Unit> = QueryResult.Unit
+    ): QueryResult.Value<Unit> {
+      var lastVersion = oldVersion
+
+      callbacks.filter { it.afterVersion in oldVersion until newVersion }
+      .sortedBy { it.afterVersion }
+      .forEach { callback ->
+        migrateInternal(driver, oldVersion = lastVersion, newVersion = callback.afterVersion + 1)
+        callback.block(driver)
+        lastVersion = callback.afterVersion + 1
+      }
+
+      if (lastVersion < newVersion) {
+        migrateInternal(driver, lastVersion, newVersion)
+      }
+      return QueryResult.Unit
+    }
   }
 }

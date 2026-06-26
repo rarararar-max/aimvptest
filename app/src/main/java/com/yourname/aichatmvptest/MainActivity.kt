@@ -65,11 +65,14 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.yourname.aichatmvptest.audio.LocalAudioController
 import com.yourname.aichatmvptest.audio.RecordedAudio
+import com.yourname.aichatmvptest.security.KeystoreCrypto
+import com.yourname.aichatmvptest.settings.EncryptedSettingsRepository
 import com.yourname.aichatmvptest.shared.data.SeedData
 import com.yourname.aichatmvptest.shared.data.DefaultModelConfigs
 import com.yourname.aichatmvptest.shared.database.AndroidDatabaseFactory
 import com.yourname.aichatmvptest.shared.database.LocalChatRepository
 import com.yourname.aichatmvptest.shared.database.LocalSettingsRepository
+import com.yourname.aichatmvptest.shared.database.LocalVectorStoreGateway
 import com.yourname.aichatmvptest.shared.model.AiCharacter
 import com.yourname.aichatmvptest.shared.model.ChatMessage
 import com.yourname.aichatmvptest.shared.model.Conversation
@@ -82,12 +85,16 @@ import com.yourname.aichatmvptest.shared.model.SenderType
 import com.yourname.aichatmvptest.shared.modelgateway.ChatModelRequest
 import com.yourname.aichatmvptest.shared.modelgateway.FakeModelGateway
 import com.yourname.aichatmvptest.shared.modelgateway.ModelGateway
+import com.yourname.aichatmvptest.shared.modelgateway.VisionAnalyzeRequest
 import com.yourname.aichatmvptest.shared.modelgateway.createAliyunQwenVlGateway
+import com.yourname.aichatmvptest.shared.modelgateway.createAliyunTextEmbeddingGateway
 import com.yourname.aichatmvptest.shared.modelgateway.createMinimaxTtsGateway
 import com.yourname.aichatmvptest.shared.modelgateway.createOpenAiCompatibleGateway
 import com.yourname.aichatmvptest.shared.repository.ChatRepository
 import com.yourname.aichatmvptest.shared.repository.SettingsRepository
 import com.yourname.aichatmvptest.shared.voice.TtsRequest
+import com.yourname.aichatmvptest.shared.vector.VectorMemory
+import com.yourname.aichatmvptest.shared.vector.VectorStoreGateway
 import com.yourname.aichatmvptest.shared.call.CallState
 import com.yourname.aichatmvptest.ui.theme.MvptestTheme
 import com.yourname.aichatmvptest.notification.RhodesNotificationCenter
@@ -127,12 +134,17 @@ class MainActivity : ComponentActivity() {
         ProactiveMessageScheduler.schedule(this)
         val database = AndroidDatabaseFactory(applicationContext).createDatabase()
         val chatRepository = LocalChatRepository(database)
-        val settingsRepository = LocalSettingsRepository(database)
+        val vectorStoreGateway = LocalVectorStoreGateway(database)
+        val settingsRepository = EncryptedSettingsRepository(
+            delegate = LocalSettingsRepository(database),
+            crypto = KeystoreCrypto(),
+        )
         setContent {
             MvptestTheme {
                 RhodesApp(
                     chatRepository = chatRepository,
                     settingsRepository = settingsRepository,
+                    vectorStoreGateway = vectorStoreGateway,
                     onPickImage = { handler -> pickImage(handler) },
                     onTakePhoto = { handler -> takePhoto(handler) },
                     onPrepareImageForModel = { uri -> prepareImageForModel(uri) },
@@ -214,6 +226,7 @@ private val RhodesPanelBrush = Brush.linearGradient(
 private fun RhodesApp(
     chatRepository: ChatRepository,
     settingsRepository: SettingsRepository,
+    vectorStoreGateway: VectorStoreGateway,
     onPickImage: ((String) -> Unit) -> Unit,
     onTakePhoto: ((String) -> Unit) -> Unit,
     onPrepareImageForModel: (String) -> String?,
@@ -377,6 +390,13 @@ private fun RhodesApp(
                                 (message.content as? MessageContent.Text)?.text
                             },
                         )
+                    )
+                    saveMemoryHints(
+                        configs = modelConfigs,
+                        characterId = conversation.characterId,
+                        sourceMessageId = userMessage.id,
+                        memoryHints = reply.memoryHints,
+                        vectorStoreGateway = vectorStoreGateway,
                     )
                     reply.messages.forEachIndexed { index, segment ->
                         delay(segment.delayMs)
@@ -632,6 +652,8 @@ private fun ModelConfigEditor(config: ModelConfig, onBack: () -> Unit, onSave: (
     var apiKey by remember { mutableStateOf(config.apiKeyMasked) }
     var modelName by remember { mutableStateOf(config.modelName) }
     var enabled by remember { mutableStateOf(config.enabled) }
+    var testResult by remember { mutableStateOf("未测试") }
+    val scope = rememberCoroutineScope()
 
     LazyColumn(
         modifier = Modifier
@@ -660,20 +682,42 @@ private fun ModelConfigEditor(config: ModelConfig, onBack: () -> Unit, onSave: (
             )
         }
         item {
-            Button(
-                onClick = {
-                    onSave(
-                        config.copy(
-                            provider = provider,
-                            baseUrl = baseUrl,
-                            apiKeyMasked = apiKey,
-                            modelName = modelName,
-                            enabled = enabled,
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                Button(
+                    onClick = {
+                        scope.launch {
+                            testResult = "测试中..."
+                            testResult = testModelConfig(
+                                config.copy(
+                                    provider = provider,
+                                    baseUrl = baseUrl,
+                                    apiKeyMasked = apiKey,
+                                    modelName = modelName,
+                                    enabled = enabled,
+                                )
+                            )
+                        }
+                    },
+                    modifier = Modifier.weight(1f),
+                ) { Text("测试连接") }
+                Button(
+                    onClick = {
+                        onSave(
+                            config.copy(
+                                provider = provider,
+                                baseUrl = baseUrl,
+                                apiKeyMasked = apiKey,
+                                modelName = modelName,
+                                enabled = enabled,
+                            )
                         )
-                    )
-                },
-                modifier = Modifier.fillMaxWidth(),
-            ) { Text("保存配置") }
+                    },
+                    modifier = Modifier.weight(1f),
+                ) { Text("保存配置") }
+            }
+        }
+        item {
+            FeatureCard("测试结果", testResult)
         }
     }
 }
@@ -1114,6 +1158,7 @@ private fun RhodesAppPreview() {
         RhodesApp(
             chatRepository = PreviewChatRepository(),
             settingsRepository = PreviewSettingsRepository(),
+            vectorStoreGateway = PreviewVectorStoreGateway(),
             onPickImage = { handler -> handler("preview://album") },
             onTakePhoto = { handler -> handler("preview://camera") },
             onPrepareImageForModel = { it },
@@ -1154,6 +1199,13 @@ private class PreviewSettingsRepository : SettingsRepository {
     }
     override suspend fun getVectorStoreConfig() = DefaultModelConfigs.vectorStore
     override suspend fun saveVectorStoreConfig(config: com.yourname.aichatmvptest.shared.model.VectorStoreConfig) = Unit
+}
+
+private class PreviewVectorStoreGateway : VectorStoreGateway {
+    override suspend fun upsert(memory: VectorMemory) = Unit
+    override suspend fun search(request: com.yourname.aichatmvptest.shared.vector.VectorSearchRequest): List<VectorMemory> = emptyList()
+    override suspend fun delete(memoryId: String) = Unit
+    override suspend fun clearCharacterMemory(characterId: String) = Unit
 }
 
 private suspend fun seedModelConfigsIfNeeded(settingsRepository: SettingsRepository) {
@@ -1208,6 +1260,45 @@ private suspend fun analyzeImageAndReply(
     chatRepository.saveMessage(aiMessage)
 }
 
+private suspend fun saveMemoryHints(
+    configs: List<ModelConfig>,
+    characterId: String,
+    sourceMessageId: String,
+    memoryHints: List<com.yourname.aichatmvptest.shared.modelgateway.MemoryHint>,
+    vectorStoreGateway: VectorStoreGateway,
+) {
+    if (memoryHints.isEmpty()) return
+    val embeddingConfig = configs.firstOrNull { it.modelType == ModelType.Embedding && it.enabled }
+
+    memoryHints.forEach { hint ->
+        val embedding = if (embeddingConfig != null && embeddingConfig.baseUrl.isNotBlank() && embeddingConfig.apiKeyMasked.isNotBlank()) {
+            runCatching {
+                createAliyunTextEmbeddingGateway(
+                    endpoint = embeddingConfig.baseUrl,
+                    apiKey = embeddingConfig.apiKeyMasked,
+                    modelName = embeddingConfig.modelName.ifBlank { "text-embedding-v4" },
+                ).embed(hint.content)
+            }.getOrDefault(emptyList())
+        } else {
+            emptyList()
+        }
+
+        vectorStoreGateway.upsert(
+            VectorMemory(
+                id = "memory_${System.currentTimeMillis()}_${hint.type}",
+                characterId = characterId,
+                content = hint.content,
+                importance = hint.importance,
+                embedding = embedding,
+                metadata = mapOf(
+                    "type" to hint.type,
+                    "source_message_id" to sourceMessageId,
+                ),
+            )
+        )
+    }
+}
+
 private suspend fun buildAiReplyMessage(
     configs: List<ModelConfig>,
     conversation: Conversation,
@@ -1219,15 +1310,17 @@ private suspend fun buildAiReplyMessage(
     if (segmentType == "voice" && segmentText.isNotBlank()) {
         val tts = configs.firstOrNull { it.modelType == ModelType.Tts && it.enabled }
         if (tts != null && tts.baseUrl.isNotBlank() && tts.apiKeyMasked.isNotBlank()) {
+            val ttsModel = tts.modelName.substringBefore("|", "speech-2.8-hd").ifBlank { "speech-2.8-hd" }
+            val voiceId = tts.modelName.substringAfter("|", "male-qn-qingse").ifBlank { "male-qn-qingse" }
             val audio = runCatching {
                 createMinimaxTtsGateway(
                     endpoint = tts.baseUrl,
                     apiKey = tts.apiKeyMasked,
-                    modelName = tts.modelName.ifBlank { "speech-2.8-hd" },
+                    modelName = ttsModel,
                 ).synthesize(
                     TtsRequest(
                         text = segmentText,
-                        voiceId = tts.modelName.substringAfter("|", "male-qn-qingse"),
+                        voiceId = voiceId,
                         format = "mp3",
                     )
                 )
@@ -1262,4 +1355,67 @@ private suspend fun buildAiReplyMessage(
         status = MessageStatus.Sent,
         createdAtMillis = System.currentTimeMillis(),
     )
+}
+
+private suspend fun testModelConfig(config: ModelConfig): String {
+    if (config.baseUrl.isBlank()) return "失败：Base URL 不能为空"
+    if (config.apiKeyMasked.isBlank()) return "失败：API Key 不能为空"
+
+    return runCatching {
+        when (config.modelType) {
+            ModelType.Llm -> {
+                val reply = createOpenAiCompatibleGateway(
+                    baseUrl = config.baseUrl,
+                    apiKey = config.apiKeyMasked,
+                    modelName = config.modelName.ifBlank { "deepseek-chat" },
+                ).chat(
+                    ChatModelRequest(
+                        characterId = "test",
+                        userText = "请只回复一个 JSON，用一条短消息说连接成功。",
+                        recentMessages = emptyList(),
+                    )
+                )
+                "成功：收到 ${reply.messages.size} 条回复段"
+            }
+            ModelType.Vision -> {
+                val result = createAliyunQwenVlGateway(
+                    endpoint = config.baseUrl,
+                    apiKey = config.apiKeyMasked,
+                    modelName = config.modelName.ifBlank { "qwen3-vl-plus" },
+                ).analyzeImage(
+                    VisionAnalyzeRequest(
+                        imageUrlOrBase64 = "https://img.alicdn.com/imgextra/i1/O1CN01gDEY8M1W114Hi3XcN_!!6000000002727-0-tps-1024-406.jpg",
+                        prompt = "请用一句话描述这张图。",
+                    )
+                )
+                "成功：${result.text.take(80)}"
+            }
+            ModelType.Embedding -> {
+                val embedding = createAliyunTextEmbeddingGateway(
+                    endpoint = config.baseUrl,
+                    apiKey = config.apiKeyMasked,
+                    modelName = config.modelName.ifBlank { "text-embedding-v4" },
+                ).embed("连接测试")
+                "成功：向量维度 ${embedding.size}"
+            }
+            ModelType.Tts -> {
+                val model = config.modelName.substringBefore("|", "speech-2.8-hd").ifBlank { "speech-2.8-hd" }
+                val voiceId = config.modelName.substringAfter("|", "male-qn-qingse").ifBlank { "male-qn-qingse" }
+                val result = createMinimaxTtsGateway(
+                    endpoint = config.baseUrl,
+                    apiKey = config.apiKeyMasked,
+                    modelName = model,
+                ).synthesize(TtsRequest(text = "连接测试", voiceId = voiceId))
+                "成功：音频 ${result.audioBytes?.size ?: 0} bytes"
+            }
+            ModelType.Asr -> {
+                "已保存：ASR 需要 PCM16k 音频样本，稍后在语音识别流程内测试"
+            }
+            ModelType.VectorStore -> {
+                "已保存：向量库测试将在记忆检索流程内执行"
+            }
+        }
+    }.getOrElse { error ->
+        "失败：${error.message ?: error::class.simpleName}"
+    }
 }

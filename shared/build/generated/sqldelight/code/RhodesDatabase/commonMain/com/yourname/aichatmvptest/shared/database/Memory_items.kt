@@ -11,6 +11,7 @@ public data class Memory_items(
   public val content: String,
   public val importance: Double,
   public val keywords_json: String,
+  public val embedding_json: String,
   public val remote_vector_id: String?,
   public val source_message_id: String?,
   public val created_at: Long,

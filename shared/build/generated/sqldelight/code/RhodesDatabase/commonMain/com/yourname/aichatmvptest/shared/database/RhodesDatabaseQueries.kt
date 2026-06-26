@@ -6,12 +6,59 @@ import app.cash.sqldelight.db.QueryResult
 import app.cash.sqldelight.db.SqlCursor
 import app.cash.sqldelight.db.SqlDriver
 import kotlin.Any
+import kotlin.Double
 import kotlin.Long
 import kotlin.String
 
 public class RhodesDatabaseQueries(
   driver: SqlDriver,
 ) : TransacterImpl(driver) {
+  public fun <T : Any> selectMemoriesByCharacter(character_id: String, mapper: (
+    id: String,
+    character_id: String,
+    type: String,
+    content: String,
+    importance: Double,
+    keywords_json: String,
+    embedding_json: String,
+    remote_vector_id: String?,
+    source_message_id: String?,
+    created_at: Long,
+    updated_at: Long,
+  ) -> T): Query<T> = SelectMemoriesByCharacterQuery(character_id) { cursor ->
+    mapper(
+      cursor.getString(0)!!,
+      cursor.getString(1)!!,
+      cursor.getString(2)!!,
+      cursor.getString(3)!!,
+      cursor.getDouble(4)!!,
+      cursor.getString(5)!!,
+      cursor.getString(6)!!,
+      cursor.getString(7),
+      cursor.getString(8),
+      cursor.getLong(9)!!,
+      cursor.getLong(10)!!
+    )
+  }
+
+  public fun selectMemoriesByCharacter(character_id: String): Query<Memory_items> =
+      selectMemoriesByCharacter(character_id) { id, character_id_, type, content, importance,
+      keywords_json, embedding_json, remote_vector_id, source_message_id, created_at, updated_at ->
+    Memory_items(
+      id,
+      character_id_,
+      type,
+      content,
+      importance,
+      keywords_json,
+      embedding_json,
+      remote_vector_id,
+      source_message_id,
+      created_at,
+      updated_at
+    )
+  }
+
   public fun <T : Any> selectAllCharacters(mapper: (
     id: String,
     name: String,
@@ -227,6 +274,60 @@ public class RhodesDatabaseQueries(
     )
   }
 
+  public fun upsertMemoryItem(
+    id: String,
+    character_id: String,
+    type: String,
+    content: String,
+    importance: Double,
+    keywords_json: String,
+    embedding_json: String,
+    remote_vector_id: String?,
+    source_message_id: String?,
+    created_at: Long,
+    updated_at: Long,
+  ) {
+    driver.execute(250_658_707, """
+        |INSERT OR REPLACE INTO memory_items(
+        |    id, character_id, type, content, importance, keywords_json, embedding_json, remote_vector_id,
+        |    source_message_id, created_at, updated_at
+        |) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """.trimMargin(), 11) {
+          bindString(0, id)
+          bindString(1, character_id)
+          bindString(2, type)
+          bindString(3, content)
+          bindDouble(4, importance)
+          bindString(5, keywords_json)
+          bindString(6, embedding_json)
+          bindString(7, remote_vector_id)
+          bindString(8, source_message_id)
+          bindLong(9, created_at)
+          bindLong(10, updated_at)
+        }
+    notifyQueries(250_658_707) { emit ->
+      emit("memory_items")
+    }
+  }
+
+  public fun deleteMemoryItem(id: String) {
+    driver.execute(1_623_179_535, """DELETE FROM memory_items WHERE id = ?""", 1) {
+          bindString(0, id)
+        }
+    notifyQueries(1_623_179_535) { emit ->
+      emit("memory_items")
+    }
+  }
+
+  public fun clearMemoriesByCharacter(character_id: String) {
+    driver.execute(-1_242_740_874, """DELETE FROM memory_items WHERE character_id = ?""", 1) {
+          bindString(0, character_id)
+        }
+    notifyQueries(-1_242_740_874) { emit ->
+      emit("memory_items")
+    }
+  }
+
   public fun insertCharacter(
     id: String,
     name: String,
@@ -402,6 +503,28 @@ public class RhodesDatabaseQueries(
     notifyQueries(-1_616_304_767) { emit ->
       emit("vector_store_configs")
     }
+  }
+
+  private inner class SelectMemoriesByCharacterQuery<out T : Any>(
+    public val character_id: String,
+    mapper: (SqlCursor) -> T,
+  ) : Query<T>(mapper) {
+    override fun addListener(listener: Query.Listener) {
+      driver.addListener("memory_items", listener = listener)
+    }
+
+    override fun removeListener(listener: Query.Listener) {
+      driver.removeListener("memory_items", listener = listener)
+    }
+
+    override fun <R> execute(mapper: (SqlCursor) -> QueryResult<R>): QueryResult<R> =
+        driver.executeQuery(226_489_287,
+        """SELECT memory_items.id, memory_items.character_id, memory_items.type, memory_items.content, memory_items.importance, memory_items.keywords_json, memory_items.embedding_json, memory_items.remote_vector_id, memory_items.source_message_id, memory_items.created_at, memory_items.updated_at FROM memory_items WHERE character_id = ? ORDER BY importance DESC, updated_at DESC""",
+        mapper, 1) {
+      bindString(0, character_id)
+    }
+
+    override fun toString(): String = "RhodesDatabase.sq:selectMemoriesByCharacter"
   }
 
   private inner class SelectMessagesByConversationQuery<out T : Any>(
