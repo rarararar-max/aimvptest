@@ -1,0 +1,133 @@
+CREATE TABLE characters (
+    id TEXT NOT NULL PRIMARY KEY,
+    name TEXT NOT NULL,
+    title TEXT NOT NULL,
+    description TEXT NOT NULL,
+    persona_prompt TEXT NOT NULL,
+    speaking_style TEXT NOT NULL,
+    voice_style TEXT NOT NULL,
+    animation_pack TEXT NOT NULL,
+    proactive_level INTEGER NOT NULL,
+    enabled INTEGER NOT NULL DEFAULT 1,
+    created_at INTEGER NOT NULL
+);
+
+CREATE TABLE conversations (
+    id TEXT NOT NULL PRIMARY KEY,
+    character_id TEXT NOT NULL REFERENCES characters(id),
+    title TEXT NOT NULL,
+    last_message_id TEXT,
+    unread_count INTEGER NOT NULL DEFAULT 0,
+    pinned INTEGER NOT NULL DEFAULT 0,
+    muted INTEGER NOT NULL DEFAULT 0,
+    updated_at INTEGER NOT NULL,
+    created_at INTEGER NOT NULL
+);
+
+CREATE TABLE messages (
+    id TEXT NOT NULL PRIMARY KEY,
+    conversation_id TEXT NOT NULL REFERENCES conversations(id),
+    sender_type TEXT NOT NULL,
+    sender_id TEXT NOT NULL,
+    message_type TEXT NOT NULL,
+    content_json TEXT NOT NULL,
+    status TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+);
+
+CREATE TABLE memory_items (
+    id TEXT NOT NULL PRIMARY KEY,
+    character_id TEXT NOT NULL REFERENCES characters(id),
+    type TEXT NOT NULL,
+    content TEXT NOT NULL,
+    importance REAL NOT NULL,
+    keywords_json TEXT NOT NULL DEFAULT '[]',
+    remote_vector_id TEXT,
+    source_message_id TEXT,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+);
+
+CREATE TABLE model_configs (
+    id TEXT NOT NULL PRIMARY KEY,
+    provider TEXT NOT NULL,
+    model_type TEXT NOT NULL,
+    base_url TEXT NOT NULL,
+    api_key_encrypted TEXT NOT NULL,
+    model_name TEXT NOT NULL,
+    enabled INTEGER NOT NULL DEFAULT 1,
+    updated_at INTEGER NOT NULL
+);
+
+CREATE TABLE vector_store_configs (
+    id TEXT NOT NULL PRIMARY KEY,
+    provider TEXT NOT NULL,
+    base_url TEXT NOT NULL,
+    api_key_encrypted TEXT NOT NULL,
+    collection_name TEXT NOT NULL,
+    namespace TEXT,
+    enabled INTEGER NOT NULL DEFAULT 0,
+    updated_at INTEGER NOT NULL
+);
+
+CREATE TABLE reminder_tasks (
+    id TEXT NOT NULL PRIMARY KEY,
+    character_id TEXT NOT NULL REFERENCES characters(id),
+    type TEXT NOT NULL,
+    title TEXT NOT NULL,
+    content TEXT NOT NULL,
+    scheduled_at INTEGER NOT NULL,
+    repeat_rule TEXT,
+    enabled INTEGER NOT NULL DEFAULT 1,
+    created_at INTEGER NOT NULL
+);
+
+selectAllCharacters:
+SELECT * FROM characters ORDER BY created_at ASC;
+
+countCharacters:
+SELECT COUNT(*) FROM characters;
+
+insertCharacter:
+INSERT OR REPLACE INTO characters(
+    id, name, title, description, persona_prompt, speaking_style, voice_style,
+    animation_pack, proactive_level, enabled, created_at
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+selectAllConversations:
+SELECT * FROM conversations ORDER BY pinned DESC, updated_at DESC;
+
+updateConversationLastMessage:
+UPDATE conversations
+SET last_message_id = ?, unread_count = ?, updated_at = ?
+WHERE id = ?;
+
+insertConversation:
+INSERT OR REPLACE INTO conversations(
+    id, character_id, title, last_message_id, unread_count, pinned, muted, updated_at, created_at
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+selectMessagesByConversation:
+SELECT * FROM messages WHERE conversation_id = ? ORDER BY created_at ASC;
+
+insertMessage:
+INSERT OR REPLACE INTO messages(
+    id, conversation_id, sender_type, sender_id, message_type, content_json, status, created_at, updated_at
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+selectModelConfigs:
+SELECT * FROM model_configs ORDER BY model_type ASC, provider ASC;
+
+upsertModelConfig:
+INSERT OR REPLACE INTO model_configs(
+    id, provider, model_type, base_url, api_key_encrypted, model_name, enabled, updated_at
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+
+selectEnabledVectorStoreConfig:
+SELECT * FROM vector_store_configs WHERE enabled = 1 LIMIT 1;
+
+upsertVectorStoreConfig:
+INSERT OR REPLACE INTO vector_store_configs(
+    id, provider, base_url, api_key_encrypted, collection_name, namespace, enabled, updated_at
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?);
