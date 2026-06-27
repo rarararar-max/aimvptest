@@ -1,6 +1,6 @@
 package com.yourname.aichatmvptest.shared.modelgateway
 
-import com.yourname.aichatmvptest.shared.voice.AliyunQwenAsrGateway
+import com.yourname.aichatmvptest.shared.voice.AliyunDashScopeAsrGateway
 import com.yourname.aichatmvptest.shared.voice.AsrGateway
 import com.yourname.aichatmvptest.shared.voice.MinimaxTtsGateway
 import com.yourname.aichatmvptest.shared.voice.TtsGateway
@@ -35,12 +35,10 @@ fun createMinimaxTtsGateway(
     modelName = modelName,
 )
 
-fun createAliyunQwenAsrGateway(
-    endpoint: String,
+fun createAliyunDashScopeAsrGateway(
     apiKey: String,
-    modelName: String = "qwen3-asr-flash-realtime",
-): AsrGateway = AliyunQwenAsrGateway(
-    endpoint = endpoint,
+    modelName: String = "qwen3.5-omni-flash-realtime|qwen3-asr-flash-realtime",
+): AsrGateway = AliyunDashScopeAsrGateway(
     apiKey = apiKey,
     modelName = modelName,
 )

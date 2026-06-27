@@ -7,11 +7,11 @@ import com.yourname.aichatmvptest.shared.model.VectorStoreConfig
 object DefaultModelConfigs {
     val llm = ModelConfig(
         id = "llm_openai_compatible",
-        provider = "OpenAI兼容",
+        provider = "DeepSeek / OpenAI兼容",
         modelType = ModelType.Llm,
-        baseUrl = "https://api.openai-compatible.example/v1",
+        baseUrl = "https://api.deepseek.com/v1",
         apiKeyMasked = "",
-        modelName = "deepseek-chat",
+        modelName = "deepseek-v4-flash",
         enabled = false,
     )
 
@@ -29,7 +29,7 @@ object DefaultModelConfigs {
         id = "embedding_aliyun_text_embedding_v4",
         provider = "阿里百炼",
         modelType = ModelType.Embedding,
-        baseUrl = "https://{WorkspaceId}.cn-beijing.maas.aliyuncs.com/api/v1/services/embeddings/text-embedding/text-embedding",
+        baseUrl = "https://llm-imxtee9l3et45y6z.cn-beijing.maas.aliyuncs.com/api/v1/services/embeddings/text-embedding/text-embedding",
         apiKeyMasked = "",
         modelName = "text-embedding-v4",
         enabled = false,
@@ -41,17 +41,17 @@ object DefaultModelConfigs {
         modelType = ModelType.Tts,
         baseUrl = "wss://api.minimaxi.com/ws/v1/t2a_v2",
         apiKeyMasked = "",
-        modelName = "speech-2.8-hd",
+        modelName = "speech-2.8-hd|male-qn-qingse",
         enabled = false,
     )
 
     val asr = ModelConfig(
-        id = "asr_aliyun_qwen3_realtime",
+        id = "asr_aliyun_dashscope",
         provider = "阿里百炼",
         modelType = ModelType.Asr,
-        baseUrl = "wss://{WorkspaceId}.cn-beijing.maas.aliyuncs.com/api-ws/v1/realtime",
+        baseUrl = "",
         apiKeyMasked = "",
-        modelName = "qwen3-asr-flash-realtime",
+        modelName = "qwen3.5-omni-flash-realtime|qwen3-asr-flash-realtime",
         enabled = false,
     )
 

@@ -49,6 +49,7 @@ enum class MessageType {
     Text,
     Image,
     Voice,
+    Sticker,
     Gift,
     Call,
     System,
@@ -67,10 +68,19 @@ sealed interface MessageContent {
     data class Text(val text: String) : MessageContent
 
     @Serializable
-    data class Image(val uri: String, val width: Int = 0, val height: Int = 0) : MessageContent
+    data class Image(
+        val uri: String,
+        val width: Int = 0,
+        val height: Int = 0,
+        val prompt: String? = null,
+        val caption: String? = null,
+    ) : MessageContent
 
     @Serializable
     data class Voice(val localPath: String, val durationMs: Long, val text: String? = null) : MessageContent
+
+    @Serializable
+    data class Sticker(val stickerId: String, val alt: String? = null) : MessageContent
 
     @Serializable
     data class Gift(val giftType: String, val name: String) : MessageContent

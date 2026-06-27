@@ -10,4 +10,7 @@ interface ChatRepository {
     suspend fun getConversations(): List<Conversation>
     suspend fun getMessages(conversationId: String): List<ChatMessage>
     suspend fun saveMessage(message: ChatMessage)
+    suspend fun countMessages(conversationId: String): Long
+    suspend fun getConversationSummary(conversationId: String): String?
+    suspend fun saveConversationSummary(conversationId: String, summary: String)
 }

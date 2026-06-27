@@ -7,7 +7,7 @@ import androidx.work.WorkManager
 import java.util.concurrent.TimeUnit
 
 object ProactiveMessageScheduler {
-    private const val WORK_NAME = "rhodes_proactive_message_check"
+    const val WORK_NAME = "rhodes_proactive_message_check"
 
     fun schedule(context: Context) {
         val request = PeriodicWorkRequestBuilder<ProactiveMessageWorker>(15, TimeUnit.MINUTES)
@@ -18,5 +18,9 @@ object ProactiveMessageScheduler {
             ExistingPeriodicWorkPolicy.UPDATE,
             request,
         )
+    }
+
+    fun cancel(context: Context) {
+        WorkManager.getInstance(context).cancelUniqueWork(WORK_NAME)
     }
 }

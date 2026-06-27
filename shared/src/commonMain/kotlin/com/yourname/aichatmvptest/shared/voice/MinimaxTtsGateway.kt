@@ -12,6 +12,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import com.yourname.aichatmvptest.shared.network.webSocketHttpClient
 
 class MinimaxTtsGateway(
     private val endpoint: String,
@@ -28,7 +29,9 @@ class MinimaxTtsGateway(
         ) {
             val connected = incoming.receiveCatching().getOrNull() as? Frame.Text
             val connectedEvent = connected?.readText().orEmpty()
-            if (!connectedEvent.contains("connected_success")) return@webSocket
+            if (!connectedEvent.contains("connected_success")) {
+                error("Minimax TTS connect failed: ${connectedEvent.ifBlank { "empty event" }}")
+            }
 
             send(
                 Frame.Text(
@@ -46,13 +49,18 @@ class MinimaxTtsGateway(
             )
             val started = incoming.receiveCatching().getOrNull() as? Frame.Text
             val startedEvent = started?.readText().orEmpty()
-            if (!startedEvent.contains("task_started")) return@webSocket
+            if (!startedEvent.contains("task_started")) {
+                error("Minimax TTS task_start failed: ${startedEvent.ifBlank { "empty event" }}")
+            }
 
             send(Frame.Text(json.encodeToString(MinimaxTaskContinue(text = request.text))))
 
             while (true) {
                 val frame = incoming.receiveCatching().getOrNull() ?: break
                 val text = (frame as? Frame.Text)?.readText() ?: continue
+                if (text.contains("error", ignoreCase = true) || text.contains("failed", ignoreCase = true)) {
+                    error("Minimax TTS stream error: $text")
+                }
                 val event = runCatching { json.decodeFromString(MinimaxStreamEvent.serializer(), text) }.getOrNull()
                 event?.data?.audio?.takeIf { it.isNotBlank() }?.let { hex ->
                     chunks += hexToBytes(hex)
@@ -64,6 +72,7 @@ class MinimaxTtsGateway(
         }
 
         val audioBytes = chunks.fold(ByteArray(0)) { acc, bytes -> acc + bytes }
+        if (audioBytes.isEmpty()) error("Minimax TTS returned empty audio")
         return TtsResult(
             audioBytes = audioBytes,
             audioUrl = null,
@@ -135,7 +144,7 @@ private fun hexToBytes(hex: String): ByteArray {
 
 private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
-private fun minimaxWsClient(): HttpClient = HttpClient {
+private fun minimaxWsClient(): HttpClient = webSocketHttpClient {
     install(WebSockets)
     install(ContentNegotiation) { json(json) }
 }

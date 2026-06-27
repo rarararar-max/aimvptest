@@ -28,6 +28,7 @@ kotlin {
         }
         androidMain.dependencies {
             implementation(libs.ktor.client.android)
+            implementation(libs.ktor.client.okhttp)
             implementation(libs.sqldelight.android.driver)
         }
     }

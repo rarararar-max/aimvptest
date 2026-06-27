@@ -55,7 +55,7 @@ class AliyunQwenVlGateway(
                     ),
                     parameters = NativeVisionParameters(
                         enableThinking = true,
-                        incrementalOutput = false,
+                        incrementalOutput = true,
                         thinkingBudget = 50,
                     ),
                 )
@@ -66,6 +66,20 @@ class AliyunQwenVlGateway(
     }
 
     private fun parseVisionResponse(raw: String): VisionAnalyzeResponse {
+        runCatching { json.decodeFromString(NativeVisionResponse.serializer(), raw) }
+            .getOrNull()
+            ?.let { response ->
+                val answer = response.output
+                    ?.choices
+                    ?.firstOrNull()
+                    ?.message
+                    ?.content
+                    .orEmpty()
+                    .mapNotNull { it.text }
+                    .joinToString("")
+                if (answer.isNotBlank()) return VisionAnalyzeResponse(text = answer)
+            }
+
         val lines = raw.lineSequence()
             .map { it.removePrefix("data:").trim() }
             .filter { it.isNotBlank() && it != "[DONE]" }

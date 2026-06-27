@@ -50,6 +50,13 @@ CREATE TABLE memory_items (
     updated_at INTEGER NOT NULL
 );
 
+CREATE TABLE conversation_summaries (
+    conversation_id TEXT NOT NULL PRIMARY KEY REFERENCES conversations(id),
+    summary TEXT NOT NULL,
+    message_count INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+);
+
 selectMemoriesByCharacter:
 SELECT * FROM memory_items WHERE character_id = ? ORDER BY importance DESC, updated_at DESC;
 
@@ -127,10 +134,20 @@ INSERT OR REPLACE INTO conversations(
 selectMessagesByConversation:
 SELECT * FROM messages WHERE conversation_id = ? ORDER BY created_at ASC;
 
+countMessagesByConversation:
+SELECT COUNT(*) FROM messages WHERE conversation_id = ?;
+
 insertMessage:
 INSERT OR REPLACE INTO messages(
     id, conversation_id, sender_type, sender_id, message_type, content_json, status, created_at, updated_at
 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+selectConversationSummary:
+SELECT summary FROM conversation_summaries WHERE conversation_id = ?;
+
+upsertConversationSummary:
+INSERT OR REPLACE INTO conversation_summaries(conversation_id, summary, message_count, updated_at)
+VALUES (?, ?, ?, ?);
 
 selectModelConfigs:
 SELECT * FROM model_configs ORDER BY model_type ASC, provider ASC;

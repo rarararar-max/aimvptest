@@ -24,7 +24,7 @@ private class RhodesDatabaseImpl(
 
   public object Schema : SqlSchema<QueryResult.Value<Unit>> {
     override val version: Long
-      get() = 2
+      get() = 3
 
     override fun create(driver: SqlDriver): QueryResult.Value<Unit> {
       driver.execute(null, """
@@ -84,6 +84,14 @@ private class RhodesDatabaseImpl(
           |)
           """.trimMargin(), 0)
       driver.execute(null, """
+          |CREATE TABLE conversation_summaries (
+          |    conversation_id TEXT NOT NULL PRIMARY KEY REFERENCES conversations(id),
+          |    summary TEXT NOT NULL,
+          |    message_count INTEGER NOT NULL,
+          |    updated_at INTEGER NOT NULL
+          |)
+          """.trimMargin(), 0)
+      driver.execute(null, """
           |CREATE TABLE model_configs (
           |    id TEXT NOT NULL PRIMARY KEY,
           |    provider TEXT NOT NULL,
@@ -131,6 +139,16 @@ private class RhodesDatabaseImpl(
       if (oldVersion <= 1 && newVersion > 1) {
         driver.execute(null,
             "ALTER TABLE memory_items ADD COLUMN embedding_json TEXT NOT NULL DEFAULT '[]'", 0)
+      }
+      if (oldVersion <= 2 && newVersion > 2) {
+        driver.execute(null, """
+            |CREATE TABLE IF NOT EXISTS conversation_summaries (
+            |    conversation_id TEXT NOT NULL PRIMARY KEY REFERENCES conversations(id),
+            |    summary TEXT NOT NULL,
+            |    message_count INTEGER NOT NULL,
+            |    updated_at INTEGER NOT NULL
+            |)
+            """.trimMargin(), 0)
       }
       return QueryResult.Unit
     }

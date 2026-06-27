@@ -195,6 +195,16 @@ public class RhodesDatabaseQueries(
     )
   }
 
+  public fun countMessagesByConversation(conversation_id: String): Query<Long> =
+      CountMessagesByConversationQuery(conversation_id) { cursor ->
+    cursor.getLong(0)!!
+  }
+
+  public fun selectConversationSummary(conversation_id: String): Query<String> =
+      SelectConversationSummaryQuery(conversation_id) { cursor ->
+    cursor.getString(0)!!
+  }
+
   public fun <T : Any> selectModelConfigs(mapper: (
     id: String,
     provider: String,
@@ -447,6 +457,26 @@ public class RhodesDatabaseQueries(
     }
   }
 
+  public fun upsertConversationSummary(
+    conversation_id: String,
+    summary: String,
+    message_count: Long,
+    updated_at: Long,
+  ) {
+    driver.execute(-1_935_914_844, """
+        |INSERT OR REPLACE INTO conversation_summaries(conversation_id, summary, message_count, updated_at)
+        |VALUES (?, ?, ?, ?)
+        """.trimMargin(), 4) {
+          bindString(0, conversation_id)
+          bindString(1, summary)
+          bindLong(2, message_count)
+          bindLong(3, updated_at)
+        }
+    notifyQueries(-1_935_914_844) { emit ->
+      emit("conversation_summaries")
+    }
+  }
+
   public fun upsertModelConfig(
     id: String,
     provider: String,
@@ -547,5 +577,47 @@ public class RhodesDatabaseQueries(
     }
 
     override fun toString(): String = "RhodesDatabase.sq:selectMessagesByConversation"
+  }
+
+  private inner class CountMessagesByConversationQuery<out T : Any>(
+    public val conversation_id: String,
+    mapper: (SqlCursor) -> T,
+  ) : Query<T>(mapper) {
+    override fun addListener(listener: Query.Listener) {
+      driver.addListener("messages", listener = listener)
+    }
+
+    override fun removeListener(listener: Query.Listener) {
+      driver.removeListener("messages", listener = listener)
+    }
+
+    override fun <R> execute(mapper: (SqlCursor) -> QueryResult<R>): QueryResult<R> =
+        driver.executeQuery(671_931_269,
+        """SELECT COUNT(*) FROM messages WHERE conversation_id = ?""", mapper, 1) {
+      bindString(0, conversation_id)
+    }
+
+    override fun toString(): String = "RhodesDatabase.sq:countMessagesByConversation"
+  }
+
+  private inner class SelectConversationSummaryQuery<out T : Any>(
+    public val conversation_id: String,
+    mapper: (SqlCursor) -> T,
+  ) : Query<T>(mapper) {
+    override fun addListener(listener: Query.Listener) {
+      driver.addListener("conversation_summaries", listener = listener)
+    }
+
+    override fun removeListener(listener: Query.Listener) {
+      driver.removeListener("conversation_summaries", listener = listener)
+    }
+
+    override fun <R> execute(mapper: (SqlCursor) -> QueryResult<R>): QueryResult<R> =
+        driver.executeQuery(-338_102_345,
+        """SELECT summary FROM conversation_summaries WHERE conversation_id = ?""", mapper, 1) {
+      bindString(0, conversation_id)
+    }
+
+    override fun toString(): String = "RhodesDatabase.sq:selectConversationSummary"
   }
 }

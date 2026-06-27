@@ -134,12 +134,30 @@ class LocalChatRepository(
         )
     }
 
+    override suspend fun countMessages(conversationId: String): Long {
+        return queries.countMessagesByConversation(conversationId).executeAsOne()
+    }
+
+    override suspend fun getConversationSummary(conversationId: String): String? {
+        return queries.selectConversationSummary(conversationId).executeAsOneOrNull()
+    }
+
+    override suspend fun saveConversationSummary(conversationId: String, summary: String) {
+        queries.upsertConversationSummary(
+            conversation_id = conversationId,
+            summary = summary,
+            message_count = countMessages(conversationId),
+            updated_at = nowMillis(),
+        )
+    }
+
     private fun messagePreview(contentJson: String): String {
         return runCatching {
             when (val content = json.decodeFromString(MessageContent.serializer(), contentJson)) {
                 is MessageContent.Text -> content.text
                 is MessageContent.Image -> "[图片]"
                 is MessageContent.Voice -> "[语音]"
+                is MessageContent.Sticker -> "[表情] ${content.alt.orEmpty()}"
                 is MessageContent.Gift -> "[${content.giftType}] ${content.name}"
                 is MessageContent.Call -> "[${content.callType}] ${content.status}"
             }
